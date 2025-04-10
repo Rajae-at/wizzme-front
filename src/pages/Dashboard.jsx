@@ -3,6 +3,7 @@ import axios from "axios";
 import io from "socket.io-client";
 import "../assets/styles/Dashboard.css";
 import wizzSound from "../assets/sounds/wizz.mp3";
+import messageSound from "../assets/sounds/received.mp3";
 
 const Dashboard = () => {
   const [users, setUsers] = useState([]);
@@ -15,6 +16,7 @@ const Dashboard = () => {
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(true);
   const chatWindowRef = useRef(null);
   const wizzSoundRef = useRef(null);
+  const messageSoundRef = useRef(null);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -24,9 +26,15 @@ const Dashboard = () => {
 
     // Initialiser l'audio avec le chemin importé
     wizzSoundRef.current = new Audio(wizzSound);
-    // Précharger le son
+    messageSoundRef.current = new Audio(messageSound);
+    // Précharger les sons
     wizzSoundRef.current.load();
-    console.log("Audio initialisé:", wizzSoundRef.current);
+    messageSoundRef.current.load();
+    console.log(
+      "Audio initialisé:",
+      wizzSoundRef.current,
+      messageSoundRef.current
+    );
 
     return () => {
       if (socketRef.current) {
@@ -77,6 +85,17 @@ const Dashboard = () => {
           pseudo: data.pseudo,
         };
         setMessages((prev) => [...prev, newMessage]);
+
+        // Jouer le son du message reçu
+        if (messageSoundRef.current) {
+          messageSoundRef.current.currentTime = 0;
+          messageSoundRef.current
+            .play()
+            .then(() => console.log("Son du message reçu joué avec succès"))
+            .catch((error) =>
+              console.error("Erreur lors de la lecture du son:", error)
+            );
+        }
       });
 
       socketRef.current.on("receive_wizz", (data) => {
@@ -116,6 +135,17 @@ const Dashboard = () => {
         timestamp: new Date().toLocaleTimeString(),
       };
       setMessages((prev) => [...prev, message]);
+
+      // Jouer le son du message envoyé
+      if (messageSoundRef.current) {
+        messageSoundRef.current.currentTime = 0;
+        messageSoundRef.current
+          .play()
+          .then(() => console.log("Son du message envoyé joué avec succès"))
+          .catch((error) =>
+            console.error("Erreur lors de la lecture du son:", error)
+          );
+      }
 
       console.log("Envoi du message à:", selectedUser.email);
       socketRef.current.emit("send_message", {
