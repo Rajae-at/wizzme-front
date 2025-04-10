@@ -6,11 +6,12 @@ import {
 } from "react-router-dom";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
+import Login from "./pages/Login";
 import Header from "./components/Header";
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/" />;
+  return token ? children : <Navigate to="/login" />;
 };
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
       <Header />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
         <Route
           path="/dashboard"
           element={

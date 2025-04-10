@@ -1,14 +1,59 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import logo from "../assets/images/logo-le-reacteur.png";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "../assets/styles/Header.css";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const user = JSON.parse(localStorage.getItem("user"));
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
+
+  const checkUser = () => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        setUser(JSON.parse(userData));
+      } catch (error) {
+        console.error("Erreur lors du parsing des données utilisateur:", error);
+        setUser(null);
+      }
+    } else {
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    checkUser();
+
+    // Écouter les changements dans le localStorage
+    window.addEventListener("storage", checkUser);
+
+    return () => {
+      window.removeEventListener("storage", checkUser);
+    };
+  }, []);
+
+  // Vérifier l'état de l'utilisateur toutes les 500ms
+  useEffect(() => {
+    const interval = setInterval(checkUser, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
+  };
+
+  const handleAuth = () => {
+    if (user) {
+      // Déconnexion
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      setUser(null);
+      navigate("/login");
+    } else {
+      // Redirection vers la page de connexion
+      navigate("/login");
+    }
   };
 
   return (
@@ -46,9 +91,9 @@ const Header = () => {
               </Link>
             </li>
             <li>
-              <Link to="/contact" onClick={() => setIsMenuOpen(false)}>
-                Se déconnecter
-              </Link>
+              <button className="auth-button" onClick={handleAuth}>
+                {user ? "Se déconnecter" : "Se connecter"}
+              </button>
             </li>
           </ul>
         </nav>

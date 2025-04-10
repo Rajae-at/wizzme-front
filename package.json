@@ -17,6 +17,7 @@
     "react-draggable": "^4.4.6",
     "react-router-dom": "^7.5.0",
     "react-scripts": "^5.0.1",
+    "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {

@@ -39,16 +39,24 @@
   margin: 0;
   padding: 0;
   gap: 2rem;
+  align-items: center;
 }
 
-.nav-links a {
+.nav-links a,
+.nav-links button {
   text-decoration: none;
   color: white;
   font-weight: 500;
   transition: color 0.3s ease;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-links button:hover {
   color: #5c47d2;
 }
 
@@ -151,4 +159,21 @@
 
 .user-name:hover {
   background-color: rgba(255, 255, 255, 0.2);
+}
+
+.auth-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  transition: all 0.3s ease;
+}
+
+.auth-button:hover {
+  color: #5c47d2;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
 }

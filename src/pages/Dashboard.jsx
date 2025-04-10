@@ -73,6 +73,8 @@ const Dashboard = () => {
           text: data.message,
           sender: "other",
           timestamp: new Date().toLocaleTimeString(),
+          from: data.from,
+          pseudo: data.pseudo,
         };
         setMessages((prev) => [...prev, newMessage]);
       });
@@ -114,6 +116,8 @@ const Dashboard = () => {
         timestamp: new Date().toLocaleTimeString(),
       };
       setMessages((prev) => [...prev, message]);
+
+      console.log("Envoi du message à:", selectedUser.email);
       socketRef.current.emit("send_message", {
         to: selectedUser.email,
         message: newMessage,
