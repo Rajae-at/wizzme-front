@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import "../assets/styles/Home.css";
 
-const App = () => {
+const Home = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pseudo, setPseudo] = useState("");
   const [users, setUsers] = useState([]);
-  const [token, setToken] = useState("");
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const navigate = useNavigate();
 
   // Fonction pour se connecter
   const handleLogin = async () => {
@@ -16,12 +18,12 @@ const App = () => {
         email,
         password,
       });
-      setToken(response.data.token);
-      setLoggedIn(true);
-      alert("Logged in successfully!");
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("user", JSON.stringify({ email, pseudo }));
+      navigate("/dashboard");
     } catch (error) {
-      console.error("Error logging in:", error);
-      alert("Failed to log in.");
+      console.error("Erreur de connexion:", error);
+      alert("Échec de la connexion.");
     }
   };
 
@@ -32,12 +34,12 @@ const App = () => {
         "http://localhost:3000/users/register",
         { email, pseudo, password }
       );
-      setToken(response.data.token);
-      setLoggedIn(true);
-      alert("Registered successfully!");
+      localStorage.setItem("token", response.data.token);
+      localStorage.setItem("user", JSON.stringify({ email, pseudo }));
+      navigate("/dashboard");
     } catch (error) {
-      console.error("Error registering:", error);
-      alert("Failed to register.");
+      console.error("Erreur d'inscription:", error);
+      alert("Échec de l'inscription.");
     }
   };
 
@@ -53,47 +55,47 @@ const App = () => {
   };
 
   useEffect(() => {
-    if (loggedIn) {
-      fetchUsers(); // Récupère les utilisateurs dès que l'utilisateur est connecté
-    }
-  }, [loggedIn]);
+    fetchUsers(); // Récupère les utilisateurs dès que le composant est monté
+  }, []);
 
   return (
-    <div>
-      {!loggedIn ? (
-        <div>
-          <h2>Login or Register</h2>
+    <div className="home-container">
+      <div className="auth-container">
+        <h2>{isRegistering ? "Inscription" : "Connexion"}</h2>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+        />
+        {isRegistering && (
           <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email"
+            type="text"
+            value={pseudo}
+            onChange={(e) => setPseudo(e.target.value)}
+            placeholder="Pseudo"
           />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-          />
-          <button onClick={handleLogin}>Login</button>
-          <button onClick={handleRegister}>Register</button>
-        </div>
-      ) : (
-        <div>
-          <h2>Welcome, {pseudo}</h2>
-          <h3>Users</h3>
-          {users.map((user) => (
-            <div key={user.email}>
-              <span>{user.pseudo}</span>
-              <button onClick={() => alert(`Send message to ${user.pseudo}`)}>
-                Send Message
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Mot de passe"
+        />
+        <button onClick={isRegistering ? handleRegister : handleLogin}>
+          {isRegistering ? "S'inscrire" : "Se connecter"}
+        </button>
+        <button
+          className="switch-auth-mode"
+          onClick={() => setIsRegistering(!isRegistering)}
+        >
+          {isRegistering
+            ? "Déjà un compte ? Se connecter"
+            : "Pas de compte ? S'inscrire"}
+        </button>
+      </div>
     </div>
   );
 };
 
-export default App;
+export default Home;

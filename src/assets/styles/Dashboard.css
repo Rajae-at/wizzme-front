@@ -1,0 +1,382 @@
+.dashboard {
+  display: flex;
+  height: calc(100vh - 80px);
+  margin-top: 80px;
+  background-color: #f5f5f5;
+}
+
+.friends-list {
+  width: 300px;
+  background-color: #5c47d2;
+  border-right: 1px solid #4a3ab0;
+  overflow-y: auto;
+  margin-top: -80px; /* Pour compenser la marge du dashboard */
+  font-family: "Roboto", sans-serif;
+  padding-top: 80px; /* Ajout de padding en haut pour voir le titre */
+}
+
+.friends-list h2 {
+  padding: 1rem;
+  color: white;
+  border-bottom: 1px solid #4a3ab0;
+  margin: 0; /* Suppression de la marge par défaut */
+  position: sticky; /* Pour que le titre reste visible lors du défilement */
+  top: 0;
+  background-color: #5c47d2; /* Même couleur que le fond */
+  z-index: 1; /* Pour s'assurer que le titre reste au-dessus du contenu */
+}
+
+.friends-container {
+  padding: 1rem;
+}
+
+.friend-item {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  color: white;
+}
+
+.friend-item:hover {
+  background-color: #4a3ab0;
+}
+
+.friend-item.active {
+  background-color: #4a3ab0;
+}
+
+.friend-avatar {
+  width: 40px;
+  height: 40px;
+  background-color: white;
+  color: #5c47d2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-right: 1rem;
+  border: 2px solid #5c47d2;
+}
+
+.friend-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.friend-name {
+  font-weight: 500;
+}
+
+.friend-status {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.friend-item.active .friend-status {
+  color: white;
+}
+
+.chat-window {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  margin: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(92, 71, 210, 0.1);
+  transition: transform 0.1s ease;
+}
+
+/* Animation de Wizz améliorée */
+@keyframes wizz-animation {
+  0% {
+    transform: scale(1);
+  }
+  10% {
+    transform: scale(1.1) rotate(5deg);
+  }
+  20% {
+    transform: scale(0.9) rotate(-5deg);
+  }
+  30% {
+    transform: scale(1.05) rotate(5deg);
+  }
+  40% {
+    transform: scale(0.95) rotate(-5deg);
+  }
+  50% {
+    transform: scale(1) rotate(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.chat-window.wizz-animation {
+  animation: wizz-animation 0.5s ease-out;
+  transform-origin: center center;
+}
+
+.wizz-button {
+  background: #5c47d2;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wizz-button:hover {
+  background: #4a3ab0;
+  transform: scale(1.05);
+}
+
+.wizz-button:active {
+  animation: wizz-shake 0.3s ease-in-out;
+}
+
+@keyframes wizz-shake {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+  75% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.wizz-button.wizzing {
+  animation: wizz-button-pulse 0.5s ease-in-out infinite;
+}
+
+@keyframes wizz-button-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.wizz-notification {
+  background: rgba(255, 107, 107, 0.1);
+  border: 2px solid #ff6b6b;
+  color: #ff6b6b;
+  padding: 10px;
+  margin: 10px;
+  border-radius: 10px;
+  text-align: center;
+  font-weight: bold;
+  animation: notification-fade 3s ease-in-out;
+}
+
+@keyframes notification-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+.chat-header {
+  padding: 1rem;
+  background-color: #5c47d2;
+  color: white;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: "Roboto", sans-serif;
+}
+
+.chat-header h3 {
+  margin: 0;
+}
+
+.close-chat {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.message {
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+}
+
+.message.sent {
+  align-self: flex-end;
+}
+
+.message.received {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: 0.8rem;
+  border-radius: 8px;
+  background-color: #f0f0f0;
+}
+
+.message.sent .message-content {
+  background-color: #5c47d2;
+  color: white;
+}
+
+.message-time {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.3rem;
+}
+
+.message.sent .message-time {
+  color: #5c47d2;
+}
+
+.chat-input {
+  padding: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  border-top: 1px solid #eee;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.send-button,
+.wizz-button {
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.send-button {
+  background-color: #5c47d2;
+  color: white;
+}
+
+.wizz-icon {
+  font-size: 1.2rem;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.wizz-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.send-button:hover {
+  background-color: #4a3ab0;
+}
+
+.wizz-button:hover:not(:disabled) {
+  background-color: #f50057;
+}
+
+.welcome-notification {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  background-color: #5c47d2;
+  color: white;
+  padding: 15px 25px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 1000;
+  animation: slideIn 0.5s ease-out, fadeOut 0.5s ease-in 4.5s forwards;
+}
+
+.welcome-icon {
+  font-size: 1.5rem;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
