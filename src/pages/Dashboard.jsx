@@ -40,14 +40,43 @@ const FriendItem = React.memo(({ user, isSelected, isOnline, onClick }) => (
 ));
 
 // Composant pour le message
-const Message = React.memo(({ message }) => (
-  <div className={`message ${message.sender === "me" ? "sent" : "received"}`}>
-    <div className="message-content">
-      <p>{message.text}</p>
-      <span className="message-time">{message.timestamp}</span>
+const Message = React.memo(({ message }) => {
+  // Fonction pour formater la date
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return "";
+    try {
+      const date = new Date(timestamp); // Essaye de créer une date depuis le timestamp (ISO ou autre)
+      if (isNaN(date.getTime())) {
+        // Vérifie si la date est valide
+        // Si invalide, tente de voir si c'est déjà une heure (ex: "10:30:00")
+        if (/^\d{1,2}:\d{2}:\d{2}$/.test(timestamp)) {
+          return timestamp; // Retourne directement si c'est déjà formaté
+        }
+        return "Date invalide";
+      }
+      // Si la date est valide, retourne l'heure locale
+      return date.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch (error) {
+      console.error("Erreur formatage timestamp:", timestamp, error);
+      return "Erreur date";
+    }
+  };
+
+  return (
+    <div className={`message ${message.sender === "me" ? "sent" : "received"}`}>
+      <div className="message-content">
+        <p>{message.text}</p>
+        {/* Utilise la fonction de formatage ici */}
+        <span className="message-time">
+          {formatTimestamp(message.timestamp)}
+        </span>
+      </div>
     </div>
-  </div>
-));
+  );
+});
 
 const Dashboard = () => {
   // États
@@ -199,7 +228,7 @@ const Dashboard = () => {
       const newMessage = {
         text: data.message,
         sender: "other",
-        timestamp: new Date(data.timestamp).toLocaleTimeString(),
+        timestamp: data.timestamp,
         from: data.from,
         pseudo: data.pseudo,
       };
