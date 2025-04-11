@@ -1,160 +1,210 @@
-// Wizz
-socket.on("wizz", ({ to, from, pseudo }) => {
-  console.log("Wizz reçu de:", from, "pour:", to);
-  console.log("Données du Wizz:", { to, from, pseudo });
-  console.log("Socket ID de l'expéditeur:", socket.id);
-  console.log("Utilisateurs connectés:", connectedUsers);
+import express from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import cors from "cors";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 
-  const recipientSocketId = Object.keys(connectedUsers).find(
-    (id) => connectedUsers[id].email === to
-  );
+dotenv.config();
 
-  if (recipientSocketId) {
-    console.log("Destinataire trouvé:", recipientSocketId);
-    console.log("Envoi du Wizz au destinataire:", recipientSocketId);
-    io.to(recipientSocketId).emit("receive_wizz", {
-      from: from,
-      pseudo: pseudo,
-      to: to,
-    });
-    console.log("Wizz envoyé avec succès");
-  } else {
-    console.log("Destinataire non trouvé pour le Wizz:", to);
-    console.log(
-      "Liste des utilisateurs connectés:",
-      Object.values(connectedUsers)
-    );
-  }
+// Configuration
+const PORT = process.env.PORT || 3000;
+const CLIENT_URL = "http://localhost:5173";
+
+// Initialisation de l'application
+const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: CLIENT_URL,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
 });
 
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Stockage des utilisateurs connectés
+const connectedUsers = {};
+
+// Utilitaires
+const findUserSocketId = (email) => {
+  return Object.keys(connectedUsers).find(
+    (key) => connectedUsers[key].email === email
+  );
+};
+
+const emitToUser = (socketId, event, data) => {
+  if (socketId) {
+    io.to(socketId).emit(event, data);
+    return true;
+  }
+  return false;
+};
+
+const broadcastUserStatus = (email, status) => {
+  io.emit("user_status_change", { email, status });
+};
+
+// Middleware d'authentification
+const authenticateSocket = (socket, next) => {
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    return next(new Error("Authentication error"));
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.user = decoded;
+    next();
+  } catch (err) {
+    next(new Error("Authentication error"));
+  }
+};
+
+io.use(authenticateSocket);
+
+// Gestion des connexions socket
 io.on("connection", (socket) => {
-  console.log("🔌 Socket connecté :", socket.id);
-  console.log("Headers:", socket.handshake.headers);
-  console.log("Query:", socket.handshake.query);
+  console.log("Nouvelle connexion socket:", socket.id);
+  console.log("Données d'authentification:", socket.handshake.auth);
 
-  // Log tous les événements reçus
-  socket.onAny((eventName, ...args) => {
-    console.log(`Événement reçu: ${eventName}`, args);
+  // Vérification de l'authentification
+  const token = socket.handshake.auth.token;
+  const email = socket.handshake.auth.email;
+  const pseudo = socket.handshake.auth.pseudo;
+
+  if (!token || !email) {
+    console.error("Connexion rejetée - Données d'authentification manquantes");
+    socket.emit("error", { message: "Données d'authentification manquantes" });
+    socket.disconnect();
+    return;
+  }
+
+  try {
+    // Vérification du token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded.email !== email) {
+      throw new Error("Email ne correspond pas au token");
+    }
+  } catch (err) {
+    console.error("Erreur d'authentification:", err.message);
+    socket.emit("error", { message: "Token invalide" });
+    socket.disconnect();
+    return;
+  }
+
+  // Ajout de l'utilisateur à la liste des utilisateurs connectés
+  connectedUsers[email] = {
+    socketId: socket.id,
+    email: email,
+    pseudo: pseudo || email,
+  };
+  console.log("Utilisateur connecté:", email, "avec socket ID:", socket.id);
+
+  // Envoi de la liste initiale des utilisateurs en ligne
+  const onlineUsersList = Object.keys(connectedUsers);
+  console.log("Liste des utilisateurs en ligne:", onlineUsersList);
+  socket.emit("initial_online_users", onlineUsersList);
+
+  // Gestion de l'identité
+  socket.on("set_identity", (data) => {
+    console.log("Identité reçue:", data);
+    if (data.email && data.pseudo) {
+      if (data.email !== email) {
+        console.error("Tentative de changement d'identité non autorisée");
+        socket.emit("error", { message: "Changement d'identité non autorisé" });
+        return;
+      }
+      connectedUsers[data.email] = {
+        socketId: socket.id,
+        email: data.email,
+        pseudo: data.pseudo,
+      };
+      broadcastUserStatus(data.email, "online");
+    }
   });
 
-  // Test de connexion
-  socket.on("test_connection", (data) => {
-    console.log("Test de connexion reçu de", socket.id, ":", data);
-    socket.emit("test_response", {
-      status: "ok",
-      message: "Connexion testée avec succès",
-      socketId: socket.id,
-    });
-  });
+  // Gestion des messages
+  socket.on("send_message", (data) => {
+    console.log("Message reçu sur le serveur:", data);
+    console.log("État actuel des utilisateurs connectés:", connectedUsers);
 
-  // Identification
-  socket.on("set_identity", (userData) => {
-    console.log("Événement set_identity reçu de", socket.id, ":", userData);
-
-    if (!userData.email || !userData.pseudo) {
-      console.error("Données d'identité invalides:", userData);
-      socket.emit("error", { message: "Données d'identité invalides" });
+    if (!data.to || !data.message) {
+      console.error("Message invalide - données manquantes");
+      socket.emit("error", { message: "Format de message invalide" });
       return;
     }
 
-    connectedUsers[socket.id] = {
-      email: userData.email,
-      pseudo: userData.pseudo,
-    };
+    const recipient = connectedUsers[data.to];
+    console.log("Recherche du destinataire:", data.to);
+    console.log("Informations du destinataire trouvé:", recipient);
 
-    console.log(`✅ ${userData.email} (${userData.pseudo}) connecté`);
-    console.log("Utilisateurs connectés:", connectedUsers);
+    if (!recipient) {
+      console.error("Destinataire non trouvé:", data.to);
+      socket.emit("error", { message: "Destinataire non trouvé" });
+      return;
+    }
 
-    // Notifier tous les clients de la nouvelle connexion
-    io.emit("user_connected", {
-      email: userData.email,
-      pseudo: userData.pseudo,
-      socketId: socket.id,
+    console.log("Envoi du message à:", data.to);
+    console.log("Socket ID du destinataire:", recipient.socketId);
+    console.log("Informations de l'expéditeur:", {
+      email: email,
+      pseudo: connectedUsers[email].pseudo,
     });
 
-    // Envoyer la liste des utilisateurs connectés au nouveau client
-    const connectedUsersList = Object.values(connectedUsers);
-    socket.emit("users_connected", connectedUsersList);
+    io.to(recipient.socketId).emit("receive_message", {
+      message: data.message,
+      from: email,
+      pseudo: connectedUsers[email].pseudo,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log("Message envoyé avec succès au destinataire");
   });
 
-  // Message
-  socket.on("send_message", ({ to, message }) => {
-    console.log("Message envoyé à:", to);
-    console.log("Utilisateurs connectés:", connectedUsers);
-
-    const recipientSocketId = Object.keys(connectedUsers).find(
-      (id) => connectedUsers[id].email === to
-    );
-
-    if (recipientSocketId) {
-      console.log("Destinataire trouvé:", recipientSocketId);
-      io.to(recipientSocketId).emit("receive_message", {
-        from: connectedUsers[socket.id].email,
-        pseudo: connectedUsers[socket.id].pseudo,
-        message,
-      });
-    } else {
-      console.log("Destinataire non trouvé pour:", to);
+  // Gestion des wizz
+  socket.on("send_wizz", (data) => {
+    console.log("Wizz reçu pour:", data.to);
+    if (!data.to) {
+      console.error("Wizz invalide - destinataire manquant");
+      socket.emit("error", { message: "Destinataire du wizz manquant" });
+      return;
     }
-  });
 
-  // Typing indicator
-  socket.on("typing", ({ to, isTyping }) => {
-    console.log("Événement typing reçu:", { to, isTyping });
-    console.log("Socket ID de l'expéditeur:", socket.id);
-    console.log("Utilisateurs connectés:", connectedUsers);
-
-    const recipientSocketId = Object.keys(connectedUsers).find(
-      (id) => connectedUsers[id].email === to
-    );
-
-    if (recipientSocketId) {
-      console.log("Envoi de l'événement user_typing à:", recipientSocketId);
-      io.to(recipientSocketId).emit("user_typing", {
-        from: connectedUsers[socket.id].email,
-        pseudo: connectedUsers[socket.id].pseudo,
-        isTyping,
-      });
-    } else {
-      console.log("Destinataire non trouvé pour l'événement typing:", to);
+    const recipient = connectedUsers[data.to];
+    if (!recipient) {
+      console.error("Destinataire du wizz non trouvé:", data.to);
+      socket.emit("error", { message: "Destinataire du wizz non trouvé" });
+      return;
     }
+
+    console.log("Envoi du wizz à:", data.to, "via socket:", recipient.socketId);
+    io.to(recipient.socketId).emit("receive_wizz", {
+      from: email,
+      pseudo: connectedUsers[email].pseudo,
+      timestamp: new Date().toISOString(),
+    });
   });
 
-  // Wizz
-  socket.on("wizz", (data) => {
-    console.log("Wizz reçu:", data);
-    console.log("Socket ID de l'expéditeur:", socket.id);
-    console.log("Utilisateurs connectés:", connectedUsers);
-
-    const { to, from, pseudo } = data;
-    const recipientSocketId = Object.keys(connectedUsers).find(
-      (id) => connectedUsers[id].email === to
-    );
-
-    if (recipientSocketId) {
-      console.log("Destinataire trouvé:", recipientSocketId);
-      console.log("Envoi du Wizz au destinataire:", recipientSocketId);
-      io.to(recipientSocketId).emit("receive_wizz", {
-        from: from,
-        pseudo: pseudo,
-        to: to,
-      });
-      console.log("Wizz envoyé avec succès");
-    } else {
-      console.log("Destinataire non trouvé pour le Wizz:", to);
-      console.log(
-        "Liste des utilisateurs connectés:",
-        Object.values(connectedUsers)
-      );
-    }
-  });
-
-  // Déconnexion
+  // Gestion de la déconnexion
   socket.on("disconnect", () => {
-    const user = connectedUsers[socket.id];
-    if (user) {
-      console.log(`❌ ${user.email} (${user.pseudo}) déconnecté`);
-      delete connectedUsers[socket.id];
+    console.log("Déconnexion:", socket.id);
+    const userEmail = Object.keys(connectedUsers).find(
+      (key) => connectedUsers[key].socketId === socket.id
+    );
+
+    if (userEmail) {
+      console.log("Utilisateur déconnecté:", userEmail);
+      delete connectedUsers[userEmail];
+      broadcastUserStatus(userEmail, "offline");
     }
   });
+});
+
+// Démarrage du serveur
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Serveur démarré sur le port ${PORT}`);
 });

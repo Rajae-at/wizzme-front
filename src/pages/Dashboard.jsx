@@ -1,11 +1,56 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import axios from "axios";
 import io from "socket.io-client";
 import "../assets/styles/Dashboard.css";
 import wizzSound from "../assets/sounds/wizz.mp3";
 import messageSound from "../assets/sounds/received.mp3";
 
+// Constantes
+const SOCKET_URL = "http://localhost:3000";
+const API_URL = "http://localhost:3000";
+const WELCOME_TIMEOUT = 5000;
+const WIZZ_ANIMATION_DURATION = 1500;
+const WIZZ_NOTIFICATION_DURATION = 3000;
+
+// Composant pour l'avatar d'un utilisateur
+const UserAvatar = React.memo(({ pseudo }) => (
+  <div className="friend-avatar">{pseudo.charAt(0).toUpperCase()}</div>
+));
+
+// Composant pour l'élément d'ami
+const FriendItem = React.memo(({ user, isSelected, isOnline, onClick }) => (
+  <div
+    className={`friend-item ${isSelected ? "active" : ""}`}
+    onClick={onClick}
+  >
+    <UserAvatar pseudo={user.pseudo} />
+    <div className="friend-info">
+      <span className="friend-name">{user.pseudo}</span>
+      <span className={`friend-status ${isOnline ? "online" : "offline"}`}>
+        {isOnline ? "En ligne" : "Hors ligne"}
+      </span>
+    </div>
+  </div>
+));
+
+// Composant pour le message
+const Message = React.memo(({ message }) => (
+  <div className={`message ${message.sender === "me" ? "sent" : "received"}`}>
+    <div className="message-content">
+      <p>{message.text}</p>
+      <span className="message-time">{message.timestamp}</span>
+    </div>
+  </div>
+));
+
 const Dashboard = () => {
+  // États
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -14,27 +59,44 @@ const Dashboard = () => {
   const [isWizzing, setIsWizzing] = useState(false);
   const [showWizzNotification, setShowWizzNotification] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(true);
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
+
+  // Références
   const chatWindowRef = useRef(null);
   const wizzSoundRef = useRef(null);
   const messageSoundRef = useRef(null);
   const socketRef = useRef(null);
+  const userRef = useRef(JSON.parse(localStorage.getItem("user")));
 
+  // Initialisation des sons
+  useEffect(() => {
+    wizzSoundRef.current = new Audio(new URL(wizzSound, import.meta.url).href);
+    messageSoundRef.current = new Audio(
+      new URL(messageSound, import.meta.url).href
+    );
+
+    // Précharger les sons
+    wizzSoundRef.current.load();
+    messageSoundRef.current.load();
+
+    return () => {
+      // Nettoyage des ressources audio
+      if (wizzSoundRef.current) {
+        wizzSoundRef.current.pause();
+        wizzSoundRef.current = null;
+      }
+      if (messageSoundRef.current) {
+        messageSoundRef.current.pause();
+        messageSoundRef.current = null;
+      }
+    };
+  }, []);
+
+  // Initialisation du socket et récupération des utilisateurs
   useEffect(() => {
     fetchUsers();
     initializeSocket();
     showWelcomeNotification();
-
-    // Initialiser l'audio avec le chemin importé
-    wizzSoundRef.current = new Audio(wizzSound);
-    messageSoundRef.current = new Audio(messageSound);
-    // Précharger les sons
-    wizzSoundRef.current.load();
-    messageSoundRef.current.load();
-    console.log(
-      "Audio initialisé:",
-      wizzSoundRef.current,
-      messageSoundRef.current
-    );
 
     return () => {
       if (socketRef.current) {
@@ -43,187 +105,254 @@ const Dashboard = () => {
     };
   }, []);
 
-  const showWelcomeNotification = () => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (user && user.pseudo) {
+  // Fonction pour jouer un son
+  const playSound = useCallback((soundRef, soundName) => {
+    if (soundRef.current) {
+      soundRef.current.currentTime = 0;
+      soundRef.current
+        .play()
+        .then(() => console.log(`Son ${soundName} joué avec succès`))
+        .catch((error) =>
+          console.error(`Erreur lors de la lecture du son ${soundName}:`, error)
+        );
+    }
+  }, []);
+
+  // Fonction pour afficher la notification de bienvenue
+  const showWelcomeNotification = useCallback(() => {
+    if (userRef.current?.pseudo) {
       setTimeout(() => {
         setShowWelcomeMessage(false);
-      }, 5000);
+      }, WELCOME_TIMEOUT);
     }
-  };
+  }, []);
 
-  const initializeSocket = () => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (user) {
-      socketRef.current = io("http://localhost:3000", {
-        auth: {
-          token: localStorage.getItem("token"),
-          email: user.email,
-        },
-      });
-
-      socketRef.current.on("connect", () => {
-        console.log("Connecté au serveur socket");
-        // Envoyer l'identité après la connexion
-        socketRef.current.emit("set_identity", {
-          email: user.email,
-          pseudo: user.pseudo,
-        });
-      });
-
-      socketRef.current.on("connect_error", (error) => {
-        console.error("Erreur de connexion socket:", error);
-      });
-
-      socketRef.current.on("receive_message", (data) => {
-        console.log("Message reçu:", data);
-        const newMessage = {
-          text: data.message,
-          sender: "other",
-          timestamp: new Date().toLocaleTimeString(),
-          from: data.from,
-          pseudo: data.pseudo,
-        };
-        setMessages((prev) => [...prev, newMessage]);
-
-        // Jouer le son du message reçu
-        if (messageSoundRef.current) {
-          messageSoundRef.current.currentTime = 0;
-          messageSoundRef.current
-            .play()
-            .then(() => console.log("Son du message reçu joué avec succès"))
-            .catch((error) =>
-              console.error("Erreur lors de la lecture du son:", error)
-            );
-        }
-      });
-
-      socketRef.current.on("receive_wizz", (data) => {
-        console.log("Wizz reçu:", data);
-        if (chatWindowRef.current) {
-          chatWindowRef.current.classList.add("wizz-animation");
-          setTimeout(() => {
-            chatWindowRef.current.classList.remove("wizz-animation");
-          }, 1500);
-        }
-      });
-    } else {
+  // Initialisation du socket
+  const initializeSocket = useCallback(() => {
+    if (!userRef.current) {
       console.error("Aucun utilisateur trouvé dans le localStorage");
+      return;
     }
-  };
 
-  const fetchUsers = async () => {
+    const token = localStorage.getItem("token");
+    console.log("Initialisation du socket avec:", {
+      token: token ? "Présent" : "Absent",
+      user: userRef.current,
+    });
+
+    socketRef.current = io(SOCKET_URL, {
+      auth: {
+        token: token,
+        email: userRef.current.email,
+        pseudo: userRef.current.pseudo,
+      },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    // Gestion de la connexion
+    socketRef.current.on("connect", () => {
+      console.log("Socket connecté avec succès:", {
+        socketId: socketRef.current.id,
+        user: userRef.current,
+      });
+
+      // Envoyer l'identité après la connexion
+      socketRef.current.emit("set_identity", {
+        email: userRef.current.email,
+        pseudo: userRef.current.pseudo,
+      });
+      console.log("Identité envoyée au serveur");
+    });
+
+    // Gestion des erreurs de connexion
+    socketRef.current.on("connect_error", (error) => {
+      console.error("Erreur de connexion socket:", error);
+    });
+
+    // Gestion des changements de statut
+    socketRef.current.on("user_status_change", (data) => {
+      console.log("Changement de statut reçu:", data);
+      setOnlineUsers((prev) => {
+        const newSet = new Set(prev);
+        if (data.status === "online") {
+          newSet.add(data.email);
+        } else {
+          newSet.delete(data.email);
+        }
+        console.log("Nouveau set d'utilisateurs en ligne:", Array.from(newSet));
+        return newSet;
+      });
+    });
+
+    // Récupération de la liste initiale des utilisateurs en ligne
+    socketRef.current.on("initial_online_users", (data) => {
+      console.log("Liste initiale des utilisateurs en ligne reçue:", data);
+      setOnlineUsers(new Set(data));
+    });
+
+    // Réception des messages
+    socketRef.current.on("receive_message", (data) => {
+      console.log("Message reçu du serveur:", data);
+      const newMessage = {
+        text: data.message,
+        sender: "other",
+        timestamp: new Date(data.timestamp).toLocaleTimeString(),
+        from: data.from,
+        pseudo: data.pseudo,
+      };
+      console.log("Nouveau message formaté:", newMessage);
+      setMessages((prev) => [...prev, newMessage]);
+      playSound(messageSoundRef, "message reçu");
+    });
+
+    // Réception des wizz
+    socketRef.current.on("receive_wizz", (data) => {
+      console.log("Wizz reçu du serveur:", data);
+      if (chatWindowRef.current) {
+        chatWindowRef.current.classList.add("wizz-animation");
+        setTimeout(() => {
+          chatWindowRef.current.classList.remove("wizz-animation");
+        }, WIZZ_ANIMATION_DURATION);
+      }
+      playSound(wizzSoundRef, "wizz reçu");
+    });
+
+    // Gestion des erreurs
+    socketRef.current.on("error", (error) => {
+      console.error("Erreur socket reçue:", error);
+    });
+
+    // Gestion de la déconnexion
+    socketRef.current.on("disconnect", (reason) => {
+      console.log("Socket déconnecté:", reason);
+    });
+  }, [playSound]);
+
+  // Récupération des utilisateurs
+  const fetchUsers = useCallback(async () => {
     try {
-      const response = await axios.get("http://localhost:3000/users");
+      const response = await axios.get(`${API_URL}/users`);
       setUsers(response.data);
     } catch (error) {
       console.error("Erreur lors de la récupération des utilisateurs:", error);
     }
-  };
+  }, []);
 
-  const handleUserClick = (user) => {
+  // Sélection d'un utilisateur
+  const handleUserClick = useCallback((user) => {
     setSelectedUser(user);
     setIsChatOpen(true);
     setMessages([]);
-  };
+  }, []);
 
-  const handleSendMessage = () => {
-    if (newMessage.trim() && selectedUser && socketRef.current) {
-      const message = {
-        text: newMessage,
-        sender: "me",
-        timestamp: new Date().toLocaleTimeString(),
-      };
-      setMessages((prev) => [...prev, message]);
-
-      // Jouer le son du message envoyé
-      if (messageSoundRef.current) {
-        messageSoundRef.current.currentTime = 0;
-        messageSoundRef.current
-          .play()
-          .then(() => console.log("Son du message envoyé joué avec succès"))
-          .catch((error) =>
-            console.error("Erreur lors de la lecture du son:", error)
-          );
-      }
-
-      console.log("Envoi du message à:", selectedUser.email);
-      socketRef.current.emit("send_message", {
-        to: selectedUser.email,
-        message: newMessage,
+  // Envoi d'un message
+  const handleSendMessage = useCallback(() => {
+    if (!newMessage.trim() || !selectedUser || !socketRef.current) {
+      console.log("Impossible d'envoyer le message:", {
+        messageVide: !newMessage.trim(),
+        utilisateurNonSelectionne: !selectedUser,
+        socketNonConnecte: !socketRef.current,
       });
-      setNewMessage("");
+      return;
     }
-  };
 
-  const handleWizz = () => {
-    if (selectedUser && socketRef.current) {
-      setIsWizzing(true);
+    console.log("Préparation de l'envoi du message:", {
+      destinataire: selectedUser.email,
+      message: newMessage,
+      socketId: socketRef.current.id,
+      socketConnecte: socketRef.current.connected,
+    });
+
+    const message = {
+      text: newMessage,
+      sender: "me",
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, message]);
+    playSound(messageSoundRef, "message envoyé");
+
+    socketRef.current.emit("send_message", {
+      to: selectedUser.email,
+      message: newMessage,
+    });
+    console.log("Événement send_message émis au serveur");
+
+    setNewMessage("");
+  }, [newMessage, selectedUser, playSound]);
+
+  // Envoi d'un wizz
+  const handleWizz = useCallback(() => {
+    if (!selectedUser || !socketRef.current) return;
+
+    setIsWizzing(true);
+    if (chatWindowRef.current) {
+      chatWindowRef.current.classList.add("wizz-animation");
+    }
+
+    playSound(wizzSoundRef, "wizz");
+    setShowWizzNotification(true);
+
+    socketRef.current.emit("send_wizz", {
+      to: selectedUser.email,
+    });
+
+    // Réinitialisation de l'animation
+    setTimeout(() => {
+      setIsWizzing(false);
       if (chatWindowRef.current) {
-        chatWindowRef.current.classList.add("wizz-animation");
+        chatWindowRef.current.classList.remove("wizz-animation");
       }
+    }, WIZZ_ANIMATION_DURATION);
 
-      // Jouer le son wizz
-      if (wizzSoundRef.current) {
-        console.log("Tentative de lecture du son wizz");
-        wizzSoundRef.current.currentTime = 0; // Réinitialiser le son
-        wizzSoundRef.current
-          .play()
-          .then(() => {
-            console.log("Son wizz joué avec succès");
-          })
-          .catch((error) => {
-            console.error("Erreur lors de la lecture du son:", error);
-          });
-      } else {
-        console.error("wizzSoundRef.current n'est pas initialisé");
-      }
+    // Masquage de la notification
+    setTimeout(() => {
+      setShowWizzNotification(false);
+    }, WIZZ_NOTIFICATION_DURATION);
+  }, [selectedUser, playSound]);
 
-      setShowWizzNotification(true);
-      socketRef.current.emit("send_wizz", {
-        to: selectedUser.email,
-      });
+  // Fermeture du chat
+  const handleCloseChat = useCallback(() => {
+    setIsChatOpen(false);
+  }, []);
 
-      setTimeout(() => {
-        setIsWizzing(false);
-        if (chatWindowRef.current) {
-          chatWindowRef.current.classList.remove("wizz-animation");
-        }
-      }, 1500);
+  // Gestion de la soumission du formulaire
+  const handleSubmit = useCallback(
+    (e) => {
+      e.preventDefault();
+      handleSendMessage();
+    },
+    [handleSendMessage]
+  );
 
-      setTimeout(() => {
-        setShowWizzNotification(false);
-      }, 3000);
-    }
-  };
+  // Mémoisation des utilisateurs filtrés (si nécessaire)
+  const filteredUsers = useMemo(() => {
+    return users;
+  }, [users]);
 
   return (
     <div className="dashboard">
       {showWelcomeMessage && (
         <div className="welcome-notification">
           <span className="welcome-icon">👋</span> Bonjour{" "}
-          {JSON.parse(localStorage.getItem("user"))?.pseudo} !
+          {userRef.current?.pseudo} !
         </div>
       )}
+
       <div className="friends-list">
         <h2>Mes amis</h2>
         <div className="friends-container">
-          {users.map((user) => (
-            <div
+          {filteredUsers.map((user) => (
+            <FriendItem
               key={user.email}
-              className={`friend-item ${
-                selectedUser?.email === user.email ? "active" : ""
-              }`}
+              user={user}
+              isSelected={selectedUser?.email === user.email}
+              isOnline={onlineUsers.has(user.email)}
               onClick={() => handleUserClick(user)}
-            >
-              <div className="friend-avatar">
-                {user.pseudo.charAt(0).toUpperCase()}
-              </div>
-              <div className="friend-info">
-                <span className="friend-name">{user.pseudo}</span>
-                <span className="friend-status">En ligne</span>
-              </div>
-            </div>
+            />
           ))}
         </div>
       </div>
@@ -232,50 +361,42 @@ const Dashboard = () => {
         <div className="chat-window" ref={chatWindowRef}>
           <div className="chat-header">
             <h3>{selectedUser.pseudo}</h3>
-            <button className="close-chat" onClick={() => setIsChatOpen(false)}>
+            <button className="close-chat" onClick={handleCloseChat}>
               ×
             </button>
           </div>
+
           <div className="chat-messages">
             {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`message ${
-                  message.sender === "me" ? "sent" : "received"
-                }`}
-              >
-                <div className="message-content">
-                  <p>{message.text}</p>
-                  <span className="message-time">{message.timestamp}</span>
-                </div>
-              </div>
+              <Message key={index} message={message} />
             ))}
-            {showWizzNotification && (
-              <div className="wizz-notification">
-                <span className="wizz-icon">⚡</span> Vous avez envoyé un Wizz à{" "}
-                {selectedUser.pseudo}!
-              </div>
-            )}
           </div>
-          <div className="chat-input">
+
+          <form className="chat-input" onSubmit={handleSubmit}>
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Écrivez votre message..."
-              onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
             />
-            <button className="send-button" onClick={handleSendMessage}>
+            <button type="submit" className="send-button">
               Envoyer
             </button>
             <button
-              className={`wizz-button ${isWizzing ? "wizzing" : ""}`}
+              type="button"
+              className="wizz-button"
               onClick={handleWizz}
               disabled={isWizzing}
             >
-              <span className="wizz-icon">⚡</span> Wizz!
+              Wizz!
             </button>
-          </div>
+          </form>
+        </div>
+      )}
+
+      {showWizzNotification && (
+        <div className="wizz-notification">
+          Wizz envoyé à {selectedUser?.pseudo}!
         </div>
       )}
     </div>
