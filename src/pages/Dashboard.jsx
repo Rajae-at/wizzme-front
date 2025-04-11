@@ -391,12 +391,12 @@ const Dashboard = () => {
               Wizz!
             </button>
           </form>
-        </div>
-      )}
 
-      {showWizzNotification && (
-        <div className="wizz-notification">
-          Wizz envoyé à {selectedUser?.pseudo}!
+          {showWizzNotification && (
+            <div className="wizz-notification">
+              Wizz envoyé à {selectedUser?.pseudo}!
+            </div>
+          )}
         </div>
       )}
     </div>
